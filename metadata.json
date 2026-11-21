@@ -1,0 +1,6 @@
+{
+  "name": "MAXBAHIS STAFF HUB",
+  "description": "Kurumsal personel, operasyon, üye CRM, mola ve FTD yönetim platformu.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

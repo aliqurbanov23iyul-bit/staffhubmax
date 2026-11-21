@@ -1,0 +1,167 @@
+:root {
+  /* Core Dark-Purple Enterprise Palette */
+  --bg-main: #09090f;
+  --bg-sidebar: #11111b;
+  --bg-card: #191925;
+  --bg-elevated: #232334;
+  --bg-hover: rgba(255, 255, 255, 0.04);
+  --bg-input: #13131e;
+
+  --accent-primary: #8b5cf6;
+  --accent-secondary: #a78bfa;
+  --accent-soft: rgba(139, 92, 246, 0.14);
+  --accent-glow: rgba(139, 92, 246, 0.28);
+  --accent-contrast: #ffffff;
+
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+
+  --border-hairline: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
+
+  --success: #22c55e;
+  --success-soft: rgba(34, 197, 94, 0.14);
+  --warning: #f59e0b;
+  --warning-soft: rgba(245, 158, 11, 0.14);
+  --danger: #ef4444;
+  --danger-soft: rgba(239, 68, 68, 0.14);
+  --info: #3b82f6;
+  --info-soft: rgba(59, 130, 246, 0.16);
+
+  /* Typography */
+  --font-display: 'Plus Jakarta Sans', 'Manrope', system-ui, -apple-system, sans-serif;
+  --font-sans: 'Manrope', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+
+  --fs-base: 14px;
+  --fs-sm: 12.5px;
+  --fs-xs: 11.5px;
+  --fs-lg: 16px;
+  --fs-xl: 20px;
+  --fs-2xl: 26px;
+
+  /* Spatial & Radius */
+  --sidebar-width: 266px;
+  --sidebar-collapsed-width: 72px;
+  --topbar-height: 60px;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 10px 30px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.55);
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 160ms;
+  --dur-med: 240ms;
+  --anim-scale: 1;
+}
+
+/* Light Mode */
+html[data-theme='light'] {
+  --bg-main: #f4f5f8;
+  --bg-sidebar: #ffffff;
+  --bg-card: #ffffff;
+  --bg-elevated: #eceef4;
+  --bg-hover: rgba(15, 23, 42, 0.045);
+  --bg-input: #f8fafc;
+
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+
+  --border-hairline: rgba(15, 23, 42, 0.09);
+  --border-strong: rgba(15, 23, 42, 0.16);
+
+  --shadow-sm: 0 1px 4px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 8px 24px rgba(15, 23, 42, 0.08);
+  --shadow-lg: 0 20px 48px rgba(15, 23, 42, 0.14);
+}
+
+/* Theme Presets */
+html[data-preset='mor-neon'] {
+  --accent-primary: #8b5cf6;
+  --accent-secondary: #a78bfa;
+  --accent-soft: rgba(139, 92, 246, 0.14);
+  --accent-glow: rgba(139, 92, 246, 0.28);
+}
+
+html[data-preset='ocean-blue'] {
+  --accent-primary: #3b82f6;
+  --accent-secondary: #60a5fa;
+  --accent-soft: rgba(59, 130, 246, 0.14);
+  --accent-glow: rgba(59, 130, 246, 0.28);
+}
+
+html[data-preset='emerald'] {
+  --accent-primary: #10b981;
+  --accent-secondary: #34d399;
+  --accent-soft: rgba(16, 185, 129, 0.14);
+  --accent-glow: rgba(16, 185, 129, 0.26);
+}
+
+html[data-preset='rose'] {
+  --accent-primary: #ec4899;
+  --accent-secondary: #f472b6;
+  --accent-soft: rgba(236, 72, 153, 0.14);
+  --accent-glow: rgba(236, 72, 153, 0.26);
+}
+
+html[data-preset='amber'] {
+  --accent-primary: #f59e0b;
+  --accent-secondary: #fbbf24;
+  --accent-soft: rgba(245, 158, 11, 0.14);
+  --accent-glow: rgba(245, 158, 11, 0.26);
+}
+
+html[data-preset='midnight'] {
+  --accent-primary: #6366f1;
+  --accent-secondary: #818cf8;
+  --accent-soft: rgba(99, 102, 241, 0.15);
+  --accent-glow: rgba(99, 102, 241, 0.28);
+}
+
+/* Font Size Scales */
+html[data-font-size='compact'] {
+  --fs-base: 13px;
+  --fs-sm: 12px;
+  --fs-xs: 11px;
+}
+
+html[data-font-size='large'] {
+  --fs-base: 15.5px;
+  --fs-sm: 13.5px;
+  --fs-xs: 12px;
+}
+
+/* Sidebar Width Options */
+html[data-sidebar-width='narrow'] {
+  --sidebar-width: 220px;
+}
+html[data-sidebar-width='wide'] {
+  --sidebar-width: 280px;
+}
+
+/* Animation Intensity */
+html[data-anim='subtle'] {
+  --dur-fast: 120ms;
+  --dur-med: 160ms;
+  --anim-scale: 0.4;
+}
+html[data-anim='reduced'] {
+  --dur-fast: 0ms;
+  --dur-med: 0ms;
+  --anim-scale: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0ms;
+    --dur-med: 0ms;
+    --anim-scale: 0;
+  }
+}

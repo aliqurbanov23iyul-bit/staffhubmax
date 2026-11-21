@@ -1,0 +1,13 @@
+node_modules/
+build/
+dist/
+coverage/
+artifacts/
+data/
+.aistudio/
+server.js
+bun.lock
+.DS_Store
+*.log
+.env*
+!.env.example
