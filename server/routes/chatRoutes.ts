@@ -7,13 +7,26 @@ import { realtime } from '../services/realtime';
 
 export const chatRouter = Router();
 chatRouter.use(requireAuth);
+chatRouter.use((req: AuthenticatedRequest, res, next) => {
+  if (!req.path.startsWith('/chat/messages')) { next(); return; }
+  const user = req.authUser!;
+  const messageId = req.path.split('/')[3];
+  const message = messageId ? store.chatMessages.find((item) => item.id === messageId) : null;
+  const channelId = message?.channelId || (req.method === 'GET' ? req.query.channelId : req.body?.channelId) || 'ch_genel';
+  const channel = store.channels.find((item) => item.id === channelId);
+  const admin = ['Super Admin', 'İşlem Admini'].includes(user.role);
+  if (!channel || (!admin && (channel.teamScope ? channel.teamScope !== user.team : channel.isPrivate))) {
+    res.status(403).json({ error: 'Bu kanala erişiminiz yok.' }); return;
+  }
+  next();
+});
 
 chatRouter.get('/chat/channels', (req: AuthenticatedRequest, res) => {
   const user = req.authUser!;
   const onlineIds = new Set(realtime.getOnlineUserIds());
 
   const channels = store.channels.filter((ch) => {
-    if (!ch.teamScope) return true;
+    if (!ch.teamScope && !ch.isPrivate) return true;
     if (user.role === 'Super Admin' || user.role === 'İşlem Admini') return true;
     return ch.teamScope === user.team;
   });

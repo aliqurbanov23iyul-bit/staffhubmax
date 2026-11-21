@@ -238,6 +238,7 @@ export async function renderOperationsChatPage(viewport) {
 
   const wsHandler = (ev) => {
     const { event, payload } = ev.detail || {};
+    if (event === 'sync:refresh') { loadOps().catch(() => {}); return; }
     if (event === 'operation:created' && payload) {
       if (!canProcess && !hasClientPermission('operations.inspect_all') && payload.managerId !== clientState.user?.id) {
         return;

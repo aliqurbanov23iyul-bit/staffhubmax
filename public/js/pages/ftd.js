@@ -204,6 +204,7 @@ export async function renderFtdPage(viewport, { isApprovalView = false } = {}) {
 
   const wsHandler = (ev) => {
     const { event } = ev.detail || {};
+    if (event === 'sync:refresh') { loadData().catch(() => {}); return; }
     if (event === 'ftd:created' || event === 'ftd:approved') loadData();
   };
 

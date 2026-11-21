@@ -127,5 +127,6 @@ window.addEventListener('keydown', (e) => {
 window.addEventListener('mb:notifications', () => {
   updateBellBadges();
 });
+window.addEventListener('mb:auth-expired', handleLogout);
 
 bootstrap();

@@ -13,6 +13,6 @@
     "noEmit": true,
     "strict": true
   },
-  "include": ["server.ts", "server/**/*.ts", "vite.config.ts"],
+  "include": ["server.ts", "server/**/*.ts", "api/**/*.ts", "vite.config.ts"],
   "exclude": ["dist", "node_modules", "public"]
 }

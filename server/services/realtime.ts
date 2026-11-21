@@ -73,7 +73,8 @@ class RealtimeService {
   }
 
   public getOnlineUserIds(): string[] {
-    const set = new Set<string>();
+    const now = Date.now();
+    const set = new Set(store.sessions.filter((session) => now - new Date(session.lastSeenAt).getTime() < 60_000 && new Date(session.expiresAt).getTime() > now).map((session) => session.userId));
     for (const c of this.clients) {
       if (c.ws.readyState === WebSocket.OPEN) {
         set.add(c.userId);
@@ -117,11 +118,10 @@ class RealtimeService {
 
   public pushNotification(notification: AppNotification): void {
     store.notifications.unshift(notification);
-    if (store.notifications.length > 600) store.notifications.length = 600;
     this.sendToUser(notification.userId, 'notification:new', notification);
   }
 
-  private checkBreaksAndNotify(): void {
+  public checkBreaksAndNotify(): void {
     const now = new Date();
     for (const session of store.breakSessions) {
       const timing = computeBreakTiming(session, now);

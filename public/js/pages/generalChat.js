@@ -19,6 +19,7 @@ export async function renderGeneralChatPage(viewport) {
   let searchQuery = '';
   let typingUsers = new Map();
   let pendingAttachments = [];
+  let draft = '';
   const canModerate = hasClientPermission('chat.moderate');
   const canMassMention = hasClientPermission('chat.mass_mention');
 
@@ -52,6 +53,11 @@ export async function renderGeneralChatPage(viewport) {
   };
 
   const render = () => {
+    const oldFeed = viewport.querySelector('#gc-feed');
+    const oldScrollTop = oldFeed?.scrollTop || 0;
+    const followLatest = !oldFeed || oldFeed.scrollHeight - oldFeed.clientHeight - oldScrollTop < 60;
+    const inputFocused = document.activeElement?.id === 'gc-input';
+    draft = viewport.querySelector('#gc-input')?.value ?? draft;
     const currentChannel = channels.find((c) => c.id === activeChannelId) || { name: 'genel', description: '' };
     const typingList = Array.from(typingUsers.values()).filter(Boolean);
 
@@ -222,6 +228,7 @@ export async function renderGeneralChatPage(viewport) {
             </label>
             <input
               id="gc-input"
+              value="${escapeHtml(draft)}"
               type="text"
               class="input"
               placeholder="#${escapeHtml(currentChannel.name)} kanalına mesaj yazın… (@isim ile etiketleyin)"
@@ -254,7 +261,8 @@ export async function renderGeneralChatPage(viewport) {
     `;
 
     const feed = viewport.querySelector('#gc-feed');
-    if (feed) feed.scrollTop = feed.scrollHeight;
+    if (feed) feed.scrollTop = followLatest ? feed.scrollHeight : oldScrollTop;
+    if (inputFocused) viewport.querySelector('#gc-input')?.focus();
 
     viewport.querySelectorAll('[data-channel-id]').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -319,9 +327,12 @@ export async function renderGeneralChatPage(viewport) {
             attachments: pendingAttachments,
           },
         });
-        input.value = '';
+        draft = '';
+        const currentInput = viewport.querySelector('#gc-input');
+        if (currentInput && currentInput.value.trim() === content) currentInput.value = '';
         replyTo = null;
         pendingAttachments = [];
+        await loadMessages();
       } catch (err) {
         showToast({ title: 'Gönderilemedi', description: err.message, type: 'danger' });
       }
@@ -393,6 +404,10 @@ export async function renderGeneralChatPage(viewport) {
 
   const wsHandler = (ev) => {
     const { event, payload } = ev.detail || {};
+    if (event === 'sync:refresh') {
+      if (!editingMsgId) loadChannels().then(loadMessages).catch(() => {});
+      return;
+    }
     if (event === 'chat:message' && payload) {
       if (payload.channelId === activeChannelId) {
         if (!messages.some((m) => m.id === payload.id)) {

@@ -5,7 +5,8 @@ Kurumsal personel yönetimi, hızlı üye CRM, gerçek zamanlı İşlem Chat, Di
 ## Teknoloji Yığını
 
 - **Frontend:** HTML5, CSS3, Vanilla JavaScript (ES6+ modülleri, framework yok)
-- **Backend:** Node.js + Express + `ws` (WebSocket)
+- **Backend:** Node.js + Express; Vercel Function (`api/index.ts`)
+- **Canlı güncelleme:** PostgreSQL revision kontrolüyle 3 saniyelik senkronizasyon; arka plandaki sekmelerde 15 saniye.
 - **Veritabanı:** PostgreSQL / Neon. `DATABASE_URL` zorunludur. Bağlantı yoksa sunucu başlamaz; örnek hesap veya kayıt üretilmez.
 
 ## Kurulum
@@ -17,7 +18,6 @@ Kurumsal personel yönetimi, hızlı üye CRM, gerçek zamanlı İşlem Chat, Di
 2. `.env.example` dosyasını `.env` olarak kopyalayın ve PostgreSQL bağlantı bilginizi ekleyin:
    ```env
    DATABASE_URL=postgres://kullanici:sifre@ep-ornek.eu-central-1.aws.neon.tech/neondb?sslmode=require
-   SESSION_SECRET=uzun-rastgele-gizli-anahtar
    ```
 3. Boş veritabanında ilk yöneticiyi oluşturmak için `.env` dosyasında `INITIAL_ADMIN_USERNAME`, `INITIAL_ADMIN_NAME`, `INITIAL_ADMIN_PASSWORD` tanımlayın ve `npm run setup:admin` çalıştırın. Bu komut mevcut hesapların parolasını değiştirmez ve yalnızca boş kullanıcı tablosunda çalışır. Ardından kurulum parolasını `.env` dosyasından kaldırın. Hazır kullanıcı veya ortak parola bulunmaz.
 4. Geliştirme sunucusunu başlatın:
@@ -35,12 +35,16 @@ Kurumsal personel yönetimi, hızlı üye CRM, gerçek zamanlı İşlem Chat, Di
 
 ## Yayınlama (Deployment)
 
-### Mevcut sınırlar
+### Kalıcı veri ve Vercel
 
-Demo verileri ve otomatik örnek hesap oluşturma kaldırılmıştır. Başlangıçta mevcut PostgreSQL kayıtları okunur. Ancak orijinal uygulamadaki birçok CRM, sohbet, FTD, mola ve ayar değişikliği hâlâ yalnızca bellekte uygulanmaktadır. Bu yazma yolları kalıcı veritabanı işlemlerine taşınıp yeniden başlatma testlerinden geçmeden uygulama gerçek iş verileri için kullanılmamalıdır. Bir PostgreSQL bağlantısının başarılı olması bu sınırı ortadan kaldırmaz.
+Demo verisi oluşturulmaz. Kullanıcılar, oturumlar, CRM, sohbet, FTD, molalar, bildirimler, ayarlar ve yetkiler PostgreSQL'de saklanır. Her API isteği güncel veriyi transaction içinde okur; değişen satırları kaydeder ve ancak COMMIT başarılı olduktan sonra yanıt verir. Hatalı isteklerde ROLLBACK uygulanır. Vercel nüsxeleri arasındaki eşzamanlı değişiklikler PostgreSQL advisory lock ile sıralanır. Bu tasarım küçük ekipler içindir; yüksek trafik için modül bazında SQL sorguları ve daha ince kilitler tercih edilmelidir.
+
+`vercel.json`, `/api/*` isteklerini `api/index.ts` işlevine yönlendirir; arayüz `dist` üzerinden sunulur. Yalnızca `DATABASE_URL` zorunludur. İlk kurulumda Production ortamına `INITIAL_ADMIN_USERNAME`, `INITIAL_ADMIN_NAME`, `INITIAL_ADMIN_PASSWORD` eklenebilir; kullanıcı tablosu boşsa ilk yönetici oluşturulur. Mevcut hesaplara dokunulmaz. İlk giriş doğrulandıktan sonra bu üç kurulum değişkenini kaldırın. Bunları `VITE_` önekiyle tanımlamayın. Yönetici geçici parolasını Ayarlar üzerinden değiştirmelidir.
+
+Sohbet ve bildirimler `/api/sync` üzerinden yetkili API uçlarını yeniler. Ağ kesintisi veya farklı sunucu nüsxelerine yönlendirme, oturumu veya kayıtları kaybettirmez. Mola uyarıları etkin API istekleri sırasında kontrol edilir; tüm tarayıcılar kapalıyken arka plan zamanlayıcısı çalışmaz.
 
 `.env`, yerel veriler ve ekran görüntüleri repoya eklenmez. Henüz veritabanı bağlanmadıysa uygulamanın başlamaması beklenen davranıştır.
 
 - **Build:** `npm run build` (`/dist` statik arayüzü ve `server.js` sunucusunu derler)
 - **Start:** `npm start`
-- **WebSocket Notu:** Vercel yalnızca serverless HTTP işlediği için kalıcı WebSocket bağlantıları için `server.ts` Node.js sunucusu (ör. Railway, Fly.io veya Render) üzerinde veya ayrı bir WebSocket servisi ile barındırılmalıdır.
+- Vercel'de ek bir WebSocket hizmeti veya API anahtarı gerekmez. Yerelde `npm run dev`, sunuculu ortamlarda `npm start` kullanılabilir.

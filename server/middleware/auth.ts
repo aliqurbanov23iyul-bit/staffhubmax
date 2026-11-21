@@ -130,8 +130,8 @@ export function requireAuth(req: AuthenticatedRequest, res: Response, next: Next
     const hasXhr = req.headers['x-requested-with'] === 'XMLHttpRequest';
     const origin = req.headers.origin;
     const host = (req.headers['x-forwarded-host'] || req.headers.host || '') as string;
-    const originMatchesHost =
-      origin && host && (origin.includes(host) || origin.startsWith('http://localhost'));
+    let originMatchesHost = false;
+    try { originMatchesHost = Boolean(origin && host && new URL(origin).host === host); } catch {}
     if (!hasBearer && !hasXhr && !originMatchesHost) {
       res.status(403).json({ error: 'Güvenlik doğrulaması başarısız (CSRF).' });
       return;

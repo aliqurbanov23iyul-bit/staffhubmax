@@ -260,6 +260,7 @@ export async function renderAnnouncementsPage(viewport, { manageMode = false } =
   };
 
   const wsHandler = (ev) => {
+    if (ev.detail?.event === 'sync:refresh') { loadData().catch(() => {}); return; }
     const { event } = ev.detail || {};
     if (event === 'announcement:created' || event === 'announcement:acknowledged') loadData();
   };

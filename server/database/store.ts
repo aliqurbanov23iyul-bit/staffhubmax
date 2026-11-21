@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { Pool } from 'pg';
+import { Pool, type PoolClient } from 'pg';
+import { COLLECTIONS, readState, writeState, type DatabaseState, type ColumnTypes } from './persistence';
 import {
   DEFAULT_ROLE_PERMISSIONS,
   ALL_PERMISSIONS,
@@ -30,6 +31,8 @@ import type {
   UserSettings,
 } from '../core/types';
 import { getTodayDateKey } from '../core/dates';
+import crypto from 'node:crypto';
+import { hashPassword, validatePasswordStrength } from '../core/password';
 
 export function sanitizeUser(user: User): SafeUser {
   const { passwordHash: _ignored, ...safe } = user;
@@ -73,10 +76,36 @@ export class AppDatabaseStore {
     try {
       await pool.query('SELECT 1');
       const schemaPath = path.join(process.cwd(), 'server', 'database', 'schema.sql');
-      await pool.query(fs.readFileSync(schemaPath, 'utf8'));
+      const schemaClient = await pool.connect();
+      try {
+        await schemaClient.query('BEGIN');
+        await schemaClient.query('SELECT pg_advisory_xact_lock(734221901)');
+        await schemaClient.query(fs.readFileSync(schemaPath, 'utf8'));
+        await schemaClient.query('COMMIT');
+      } catch (error) {
+        await schemaClient.query('ROLLBACK');
+        throw error;
+      } finally { schemaClient.release(); }
       this.pool = pool;
       await this.bootstrapPostgresMetadata();
       await this.loadFromPostgres();
+      await this.transaction(async () => {
+        if (this.users.length === 0 && process.env.INITIAL_ADMIN_USERNAME && process.env.INITIAL_ADMIN_PASSWORD) {
+          const password = process.env.INITIAL_ADMIN_PASSWORD;
+          if (!validatePasswordStrength(password).valid) throw new Error('Initial administrator password is too weak.');
+          const user: User = {
+            id: `usr_${crypto.randomUUID()}`, username: process.env.INITIAL_ADMIN_USERNAME.trim().toLowerCase(),
+            displayName: process.env.INITIAL_ADMIN_NAME || 'Yönetici', role: 'Super Admin', team: 'Yönetim',
+            passwordHash: hashPassword(password), isActive: true, mustChangePassword: true,
+            avatarColor: '#8B5CF6', lastLoginAt: null, createdAt: new Date().toISOString(),
+          };
+          this.users.push(user);
+          this.ensureDefaultTemplatesAndSettings(user);
+        }
+        if (!this.channels.some((channel) => channel.slug === 'genel')) {
+          this.channels.push({ id: 'ch_genel', slug: 'genel', name: 'Genel', description: 'Ekip iletişim kanalı', teamScope: null, isPrivate: false });
+        }
+      });
       this.databaseConnected = true;
     } catch (error) {
       this.databaseConnected = false;
@@ -125,69 +154,82 @@ export class AppDatabaseStore {
     }
   }
 
+  private columns: ColumnTypes = {};
+  private queue: Promise<unknown> = Promise.resolve();
+  private transactionClient: PoolClient | null = null;
+  public revision = 0;
+
+  private snapshot(): DatabaseState {
+    return JSON.parse(JSON.stringify(Object.fromEntries(Object.keys(COLLECTIONS).map((key) => [key, this[key as keyof typeof COLLECTIONS]])))) as DatabaseState;
+  }
+
   private async loadFromPostgres(): Promise<void> {
     if (!this.pool) throw new Error('PostgreSQL bağlantısı kurulmadı.');
-    const collections = {
-      users: 'users', members: 'members', memberComments: 'member_comments',
-      commentTemplates: 'comment_templates', reminders: 'reminders', operations: 'operations',
-      operationHistory: 'operation_status_history', channels: 'chat_channels', chatMessages: 'chat_messages',
-      breakSchedules: 'break_schedules', breakSessions: 'break_sessions', ftdEntries: 'ftd_entries',
-      announcements: 'announcements', announcementAcks: 'announcement_acknowledgments',
-      notifications: 'notifications', userSettings: 'user_settings', auditLogs: 'audit_logs',
-    } as const;
-    for (const [collection, table] of Object.entries(collections)) {
-      const result = await this.pool.query(`SELECT * FROM ${table}`);
-      const rows = result.rows.map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [
-        key.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase()),
-        value instanceof Date ? value.toISOString() : ['amount'].includes(key) && value !== null ? Number(value) : value,
-      ])));
-      Object.assign(this, { [collection]: rows });
+    const metadata = await this.pool.query(`SELECT table_name, column_name, data_type FROM information_schema.columns WHERE table_schema=current_schema()`);
+    for (const row of metadata.rows) {
+      (this.columns[row.table_name] ||= {})[row.column_name] = row.data_type;
     }
-    for (const user of this.users) this.ensureDefaultTemplatesAndSettings(user);
+    Object.assign(this, await readState(this.pool));
   }
+
+  // Existing route logic runs against a fresh database snapshot under one cross-instance lock.
+  // The response is released only after all changed records commit successfully.
+  public async transaction<T>(work: () => Promise<T>): Promise<T> {
+    const run = async () => {
+      if (!this.pool) throw new Error('PostgreSQL bağlantısı kurulmadı.');
+      const client = await this.pool.connect();
+      let before: DatabaseState | undefined;
+      const oldPermissions = JSON.parse(JSON.stringify(this.rolePermissions));
+      try {
+        await client.query('BEGIN');
+        await client.query("SELECT pg_advisory_xact_lock(734221901)");
+        Object.assign(this, await readState(client));
+        const permissions = await client.query('SELECT role_name, permission_key FROM role_permissions');
+        for (const role of ALL_ROLES) this.rolePermissions[role] = [];
+        for (const row of permissions.rows) this.rolePermissions[row.role_name as UserRole]?.push(row.permission_key as PermissionKey);
+        const revision = await client.query('SELECT revision FROM staffhub_sync WHERE id=1');
+        this.revision = Number(revision.rows[0]?.revision || 0);
+        before = this.snapshot();
+        const previousPermissions = JSON.stringify(this.rolePermissions);
+        this.transactionClient = client;
+        const result = await work();
+        const changed = await writeState(client, this.columns, before, this.snapshot());
+        const permissionsChanged = previousPermissions !== JSON.stringify(this.rolePermissions);
+        if (permissionsChanged) {
+          await client.query('DELETE FROM role_permissions');
+          for (const role of ALL_ROLES) for (const permission of this.rolePermissions[role]) {
+            await client.query('INSERT INTO role_permissions (role_name,permission_key) VALUES ($1,$2)', [role, permission]);
+          }
+        }
+        if (changed || permissionsChanged) await client.query('UPDATE staffhub_sync SET revision=revision+1 WHERE id=1');
+        await client.query('COMMIT');
+        return result;
+      } catch (error) {
+        await client.query('ROLLBACK').catch(() => {});
+        if (before) Object.assign(this, before);
+        this.rolePermissions = oldPermissions;
+        throw error;
+      } finally {
+        this.transactionClient = null;
+        client.release();
+      }
+    };
+    const result = this.queue.then(run, run);
+    this.queue = result.catch(() => {});
+    return result;
+  }
+
   public async persistUser(user: User): Promise<void> {
-    if (!this.pool) return;
-    await this.pool.query(
-      `INSERT INTO users (id, username, display_name, role, team, password_hash, is_active, must_change_password, avatar_color, avatar_url, last_login_at, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
-       ON CONFLICT (id) DO UPDATE SET
-         display_name = EXCLUDED.display_name,
-         role = EXCLUDED.role,
-         team = EXCLUDED.team,
-         password_hash = EXCLUDED.password_hash,
-         is_active = EXCLUDED.is_active,
-         must_change_password = EXCLUDED.must_change_password,
-         avatar_color = EXCLUDED.avatar_color,
-         avatar_url = EXCLUDED.avatar_url,
-         last_login_at = EXCLUDED.last_login_at`,
-      [
-        user.id,
-        user.username,
-        user.displayName,
-        user.role,
-        user.team,
-        user.passwordHash,
-        user.isActive,
-        user.mustChangePassword,
-        user.avatarColor,
-        user.avatarUrl ?? null,
-        user.lastLoginAt,
-        user.createdAt,
-      ],
-    );
+    if (!this.transactionClient) throw new Error('User writes require a database transaction.');
+    const index = this.users.findIndex((item) => item.id === user.id);
+    if (index < 0) this.users.push(user);
+    else this.users[index] = user;
   }
 
   public async persistAuditLog(log: AuditLog): Promise<void> {
+    if (!this.transactionClient) throw new Error('Audit writes require a database transaction.');
     this.auditLogs.unshift(log);
-    if (this.auditLogs.length > 500) this.auditLogs.length = 500;
-    if (!this.pool) return;
-    await this.pool.query(
-      `INSERT INTO audit_logs (id, actor_id, actor_name, actor_role, action, target_type, target_id, details, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [log.id, log.actorId, log.actorName, log.actorRole, log.action, log.targetType, log.targetId, log.details, log.createdAt],
-    );
   }
-
   public ensureTodayBreakSessionsForUser(user: User): BreakSession[] {
     const todayKey = getTodayDateKey();
     const userSchedules = this.breakSchedules

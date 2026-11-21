@@ -1,5 +1,8 @@
 -- MAXBAHIS STAFF HUB — PostgreSQL / Neon Compatible Schema
 
+CREATE TABLE IF NOT EXISTS staffhub_sync (id INTEGER PRIMARY KEY CHECK (id=1), revision BIGINT NOT NULL DEFAULT 0);
+INSERT INTO staffhub_sync (id,revision) VALUES (1,0) ON CONFLICT DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS roles (
   name TEXT PRIMARY KEY,
   description TEXT NOT NULL DEFAULT ''

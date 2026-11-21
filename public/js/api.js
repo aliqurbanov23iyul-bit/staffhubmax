@@ -35,5 +35,6 @@ export async function apiRequest(path, options = {}) {
     throw err;
   }
 
+  if (options.method && options.method !== 'GET') window.dispatchEvent(new CustomEvent('mb:mutation'));
   return data;
 }

@@ -441,6 +441,7 @@ export async function renderBreaksPage(viewport, { isAdminControl = false } = {}
   };
 
   const wsHandler = (ev) => {
+    if (ev.detail?.event === 'sync:refresh') { loadData().catch(() => {}); return; }
     const { event } = ev.detail || {};
     if (event === 'break:updated' || event === 'break:overdue') {
       loadData();
