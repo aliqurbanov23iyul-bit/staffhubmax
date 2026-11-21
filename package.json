@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "vite build && esbuild server.ts --bundle --platform=node --packages=external --format=esm --outfile=server.js",
+    "build": "vite build && esbuild server.ts --bundle --platform=node --packages=external --format=esm --outfile=server.js && esbuild server/app.ts --bundle --platform=node --packages=external --format=esm --outfile=build/api.mjs",
     "start": "node server.js",
     "setup:admin": "tsx server/database/createAdmin.ts",
     "preview": "vite preview",
