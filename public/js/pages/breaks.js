@@ -106,11 +106,11 @@ export async function renderBreaksPage(viewport, { isAdminControl = false } = {}
     host.innerHTML = draftRows.map((row, index) => `
       <div class="break-plan-row">
         <span class="break-plan-index">${index + 1}</span>
-        <div class="field"><label for="bp-time-${index}" class="field-label">Saat</label><input id="bp-time-${index}" type="time" class="input" required value="${escapeHtml(row.time)}" data-plan-time="${index}" /></div>
+        <div class="field"><label for="bp-time-${index}" class="field-label">Saat</label><input id="bp-time-${index}" type="text" inputmode="numeric" maxlength="5" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" placeholder="13:00" class="input" required value="${escapeHtml(row.time)}" data-plan-time="${index}" /></div>
         <div class="field"><label for="bp-duration-${index}" class="field-label">Dakika</label><div class="break-duration-field"><input id="bp-duration-${index}" class="input" type="number" min="5" max="120" step="1" required value="${escapeHtml(row.duration)}" data-plan-duration="${index}" /><div class="break-duration-presets"><button type="button" data-duration-pick="15" data-row="${index}" aria-label="${index + 1}. mola 15 dakika" class="${row.duration === '15' ? 'active' : ''}">15</button><button type="button" data-duration-pick="30" data-row="${index}" aria-label="${index + 1}. mola 30 dakika" class="${row.duration === '30' ? 'active' : ''}">30</button></div></div></div>
         <button type="button" class="btn-icon" data-remove-plan-row="${index}" aria-label="${index + 1}. mola satırını kaldır" ${draftRows.length === 1 ? 'disabled' : ''}>${icon('x')}</button>
       </div>`).join('');
-    host.querySelectorAll('[data-plan-time]').forEach((input) => input.addEventListener('input', () => { draftRows[Number(input.dataset.planTime)].time = input.value; }));
+    host.querySelectorAll('[data-plan-time]').forEach((input) => input.addEventListener('input', () => { const digits = input.value.replace(/[^0-9]/g, '').slice(0,4); input.value = digits.length > 2 ? digits.slice(0,2) + ':' + digits.slice(2) : digits; draftRows[Number(input.dataset.planTime)].time = input.value; }));
     host.querySelectorAll('[data-plan-duration]').forEach((input) => input.addEventListener('input', () => {
       const index = Number(input.dataset.planDuration); draftRows[index].duration = input.value;
       host.querySelectorAll(`[data-duration-pick][data-row="${index}"]`).forEach((btn) => btn.classList.toggle('active', btn.dataset.durationPick === input.value));
@@ -127,7 +127,7 @@ export async function renderBreaksPage(viewport, { isAdminControl = false } = {}
         <form id="edit-break-form" style="display:flex;flex-direction:column;gap:12px">
           <div class="field">
             <label class="field-label" for="eb-time">Planlanan Saat</label>
-            <input id="eb-time" type="time" class="input" value="${escapeHtml(session.scheduledTime)}" required />
+            <input id="eb-time" type="text" inputmode="numeric" maxlength="5" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" placeholder="13:00" class="input" value="${escapeHtml(session.scheduledTime)}" required />
           </div>
           <div class="field">
             <label class="field-label" for="eb-dur">Planlanan Süre (Dakika)</label>
