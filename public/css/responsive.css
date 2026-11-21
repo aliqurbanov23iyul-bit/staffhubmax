@@ -184,3 +184,18 @@ html[data-theme='light'] input[type='date'] { color-scheme: light; }
   .ops-composer .btn { padding-inline: 12px; }
   .ops-chat-shell { min-height: 420px; height: calc(100dvh - var(--topbar-height) - 44px); }
 }
+
+@container (max-width: 700px) {
+  .break-plan-top { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .break-schedule-line { grid-template-columns: minmax(110px, 1fr) minmax(0, 1fr); gap: 8px; padding: 12px 16px; }
+  .break-schedule-actions { grid-column: 1 / -1; justify-content: flex-start; }
+  .break-person-header { padding: 16px; }
+}
+@container (max-width: 440px) {
+  .break-plan-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 28px; gap: 8px; }
+  .break-plan-index { display: none; }
+  .break-duration-presets { display: none; }
+  .break-plan-footer { align-items: stretch; flex-direction: column; gap: 8px; }
+  .break-timezone { white-space: normal; }
+  .break-person-header { flex-wrap: wrap; }
+}

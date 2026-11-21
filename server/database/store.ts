@@ -233,7 +233,7 @@ export class AppDatabaseStore {
   public ensureTodayBreakSessionsForUser(user: User): BreakSession[] {
     const todayKey = getTodayDateKey();
     const userSchedules = this.breakSchedules
-      .filter((s) => s.userId === user.id)
+      .filter((s) => s.userId === user.id && s.isActive !== false)
       .sort((a, b) => a.breakNumber - b.breakNumber);
 
     for (const sched of userSchedules) {

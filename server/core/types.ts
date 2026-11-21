@@ -215,6 +215,7 @@ export interface ChatMessage {
 }
 
 export interface BreakSchedule {
+  isActive?: boolean;
   id: string;
   userId: string;
   userName: string;

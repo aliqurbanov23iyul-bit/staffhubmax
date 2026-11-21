@@ -188,6 +188,8 @@ CREATE TABLE IF NOT EXISTS break_sessions (
   overdue_alert_sent BOOLEAN NOT NULL DEFAULT FALSE
 );
 
+ALTER TABLE break_schedules ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+
 CREATE TABLE IF NOT EXISTS ftd_entries (
   id TEXT PRIMARY KEY,
   manager_id TEXT NOT NULL REFERENCES users(id),

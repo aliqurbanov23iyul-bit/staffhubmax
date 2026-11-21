@@ -5,7 +5,9 @@ import { icon } from '../icons.js';
 import { showToast } from '../notifications.js';
 import { playNotificationSound } from '../sounds.js';
 import { clientState } from '../store.js';
-import { escapeHtml, formatMmSs, formatTimeTr } from '../utils.js';
+import { escapeHtml, formatMmSs } from '../utils.js';
+
+const formatTimeTr = (value) => value ? new Intl.DateTimeFormat('tr-TR', {timeZone:'Europe/Istanbul',hour:'2-digit',minute:'2-digit'}).format(new Date(value)) : '—';
 
 export async function renderBreaksPage(viewport, { isAdminControl = false } = {}) {
   let myBreaks = [];
@@ -91,55 +93,33 @@ export async function renderBreaksPage(viewport, { isAdminControl = false } = {}
     });
   };
 
-  const openAddBreakModal = () => {
-    openModal({
-      title: 'Yeni Mola Planı Ekle',
-      bodyHtml: `
-        <form id="add-break-form" style="display:flex;flex-direction:column;gap:12px">
-          <div class="field">
-            <label class="field-label" for="ab-user">Personel</label>
-            <select id="ab-user" class="select" required>
-              ${users.map((u) => `<option value="${escapeHtml(u.id)}">${escapeHtml(u.displayName)} (${escapeHtml(u.role)})</option>`).join('')}
-            </select>
-          </div>
-          <div class="field">
-            <label class="field-label" for="ab-time">Mola Saati (SS:DD)</label>
-            <input id="ab-time" type="time" class="input" value="15:00" required />
-          </div>
-          <div class="field">
-            <label class="field-label" for="ab-dur">Süre (Dakika)</label>
-            <input id="ab-dur" type="number" class="input" min="5" max="120" value="15" required />
-          </div>
-          <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:6px">
-            <button type="button" class="btn btn-secondary" id="ab-cancel">İptal</button>
-            <button type="submit" class="btn btn-primary">Mola Ekle</button>
-          </div>
-        </form>
-      `,
-      onMount: (root) => {
-        root.querySelector('#ab-cancel')?.addEventListener('click', closeModal);
-        root.querySelector('#add-break-form')?.addEventListener('submit', async (e) => {
-          e.preventDefault();
-          try {
-            await apiRequest('/breaks/schedules', {
-              method: 'POST',
-              body: {
-                userId: root.querySelector('#ab-user').value,
-                scheduledTime: root.querySelector('#ab-time').value,
-                durationMinutes: Number(root.querySelector('#ab-dur').value),
-              },
-            });
-            closeModal();
-            showToast({ title: 'Mola Planlandı', type: 'success' });
-            await loadData();
-          } catch (err) {
-            showToast({ title: 'Hata', description: err.message, type: 'danger' });
-          }
-        });
-      },
-    });
+  let selectedUserId = '';
+  let draftRows = [{ time: '13:00', duration: '15' }];
+  const presets = [
+    { label: '13:00', times: ['13:00', '14:15', '15:45', '17:00'] },
+    { label: '13:15', times: ['13:15', '14:45', '16:15', '17:30'] },
+    { label: '13:30', times: ['13:30', '15:00', '16:30', '17:45'] },
+  ];
+  const renderPlanRows = () => {
+    const host = viewport.querySelector('#break-plan-rows');
+    if (!host) return;
+    host.innerHTML = draftRows.map((row, index) => `
+      <div class="break-plan-row">
+        <span class="break-plan-index">${index + 1}</span>
+        <div class="field"><label for="bp-time-${index}" class="field-label">Saat</label><input id="bp-time-${index}" type="time" class="input" required value="${escapeHtml(row.time)}" data-plan-time="${index}" /></div>
+        <div class="field"><label for="bp-duration-${index}" class="field-label">Dakika</label><div class="break-duration-field"><input id="bp-duration-${index}" class="input" type="number" min="5" max="120" step="1" required value="${escapeHtml(row.duration)}" data-plan-duration="${index}" /><div class="break-duration-presets"><button type="button" data-duration-pick="15" data-row="${index}" aria-label="${index + 1}. mola 15 dakika" class="${row.duration === '15' ? 'active' : ''}">15</button><button type="button" data-duration-pick="30" data-row="${index}" aria-label="${index + 1}. mola 30 dakika" class="${row.duration === '30' ? 'active' : ''}">30</button></div></div></div>
+        <button type="button" class="btn-icon" data-remove-plan-row="${index}" aria-label="${index + 1}. mola satırını kaldır" ${draftRows.length === 1 ? 'disabled' : ''}>${icon('x')}</button>
+      </div>`).join('');
+    host.querySelectorAll('[data-plan-time]').forEach((input) => input.addEventListener('input', () => { draftRows[Number(input.dataset.planTime)].time = input.value; }));
+    host.querySelectorAll('[data-plan-duration]').forEach((input) => input.addEventListener('input', () => {
+      const index = Number(input.dataset.planDuration); draftRows[index].duration = input.value;
+      host.querySelectorAll(`[data-duration-pick][data-row="${index}"]`).forEach((btn) => btn.classList.toggle('active', btn.dataset.durationPick === input.value));
+    }));
+    host.querySelectorAll('[data-duration-pick]').forEach((button) => button.addEventListener('click', () => { draftRows[Number(button.dataset.row)].duration = button.dataset.durationPick; renderPlanRows(); }));
+    host.querySelectorAll('[data-remove-plan-row]').forEach((button) => button.addEventListener('click', () => { if (draftRows.length > 1) draftRows.splice(Number(button.dataset.removePlanRow), 1); renderPlanRows(); }));
+    viewport.querySelector('#bp-save').textContent = draftRows.length > 1 ? `${draftRows.length} Molayı Kaydet` : 'Molayı Kaydet';
+    viewport.querySelector('#bp-add-row').disabled = draftRows.length >= 12;
   };
-
   const openEditBreakModal = (session) => {
     openModal({
       title: `${session.userName} — ${session.breakNumber}. Mola Düzenle`,
@@ -163,6 +143,9 @@ export async function renderBreaksPage(viewport, { isAdminControl = false } = {}
         root.querySelector('#eb-cancel')?.addEventListener('click', closeModal);
         root.querySelector('#edit-break-form')?.addEventListener('submit', async (e) => {
           e.preventDefault();
+          const button = root.querySelector('button[type="submit"]');
+          button.disabled = true;
+          try {
           await apiRequest(`/breaks/schedules/${session.id}`, {
             method: 'PATCH',
             body: {
@@ -173,6 +156,8 @@ export async function renderBreaksPage(viewport, { isAdminControl = false } = {}
           closeModal();
           showToast({ title: 'Mola Güncellendi', type: 'success' });
           await loadData();
+          } catch (error) { showToast({title:'Mola Güncellenemedi',description:error.message,type:'danger'}); }
+          finally { button.disabled = false; }
         });
       },
     });
@@ -180,111 +165,70 @@ export async function renderBreaksPage(viewport, { isAdminControl = false } = {}
 
   const render = () => {
     if (isAdminControl) {
+      const activeUsers = users.filter((user) => user.isActive);
       viewport.innerHTML = `
         <div class="page-header">
-          <div>
-            <h2 class="page-title">Mola Kontrolü — Yönetim</h2>
-            <p class="page-desc">Aktif molalar, süre aşımları ve personel mola programlarını yönetin.</p>
-          </div>
-          <button type="button" class="btn btn-primary" id="admin-add-break-btn">${icon('plus')} Yeni Mola Ekle</button>
+          <div><h2 class="page-title">Mola Kontrolü</h2><p class="page-desc">Personeli seçin, saat ve süreyi yazın. Tüm saatler İstanbul saatidir.</p></div>
+          <div class="break-overview"><span><strong>${adminData.activeBreaks.length}</strong> molada</span><span class="${adminData.overdueBreaks.length ? 'is-overdue' : ''}"><strong>${adminData.overdueBreaks.length}</strong> geciken</span><span><strong>${adminData.sessions.length}</strong> planlı mola</span></div>
         </div>
-
-        ${
-          adminData.overdueBreaks.length > 0
-            ? `
-          <div class="alert-banner">
-            <div>
-              <strong>MOLA SÜRESİ AŞILDI</strong>
-              ${adminData.overdueBreaks
-                .map(
-                  (ob) => `
-                <div style="font-size:13px;margin-top:4px">
-                  Personel: <strong>${escapeHtml(ob.userName)}</strong> · Planlanan Süre: ${ob.plannedMinutes + ob.extraMinutes} Dakika ·
-                  Geçen Süre: ${Math.floor(ob.timing.elapsedSeconds / 60)} Dakika ·
-                  <strong>Gecikme: ${ob.timing.overdueMinutes} Dakika</strong>
-                </div>
-              `,
-                )
-                .join('')}
+        <section class="card break-planner" aria-labelledby="break-planner-title">
+          <div class="card-header"><div><h3 class="card-title" id="break-planner-title">Mola Ekle</h3><p class="card-subtitle">Tek bir mola ya da günlük programı birlikte ekleyin.</p></div><span class="break-timezone">İstanbul · UTC+3</span></div>
+          <form id="break-plan-form">
+            <div class="break-plan-top">
+              <div class="field"><label class="field-label" for="bp-user">Personel</label><select id="bp-user" class="select" required><option value="">Personel seçin…</option>${activeUsers.map((user) => `<option value="${escapeHtml(user.id)}" ${selectedUserId === user.id ? 'selected' : ''}>${escapeHtml(user.displayName)}</option>`).join('')}</select></div>
+              <div class="field"><span class="field-label">Hızlı program · 15 / 30 / 15 / 15 dk</span><div class="break-program-presets">${presets.map((preset, index) => `<button type="button" class="btn btn-secondary btn-sm" data-break-preset="${index}" title="${preset.times.join(' · ')}">${preset.label} başlangıç</button>`).join('')}</div></div>
             </div>
-          </div>
-        `
-            : ''
-        }
-
-        <div class="kpi-grid" style="margin-bottom:16px">
-          <div class="kpi-card">
-            <div class="kpi-top"><span>Aktif Moladaki Personel</span><span class="kpi-icon-box">${icon('clock')}</span></div>
-            <div class="kpi-value tabular-nums">${adminData.activeBreaks.length}</div>
-          </div>
-          <div class="kpi-card">
-            <div class="kpi-top"><span>Geciken Molalar</span><span class="kpi-icon-box" style="color:var(--danger);background:var(--danger-soft)">${icon('alert')}</span></div>
-            <div class="kpi-value tabular-nums" style="color:${adminData.overdueBreaks.length > 0 ? 'var(--danger)' : 'var(--text-primary)'}">${adminData.overdueBreaks.length}</div>
-          </div>
-          <div class="kpi-card">
-            <div class="kpi-top"><span>Bugünkü Toplam Mola Planı</span><span class="kpi-icon-box">${icon('timer')}</span></div>
-            <div class="kpi-value tabular-nums">${adminData.sessions.length}</div>
-          </div>
-          <div class="kpi-card">
-            <div class="kpi-top"><span>Tamamlanan Molalar</span><span class="kpi-icon-box">${icon('check-circle')}</span></div>
-            <div class="kpi-value tabular-nums">${adminData.sessions.filter((s) => s.status === 'Tamamlandı').length}</div>
-          </div>
-        </div>
-
-        <div class="table-wrap">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Personel</th>
-                <th>Mola</th>
-                <th>Planlanan Saat</th>
-                <th>Süre</th>
-                <th>Durum</th>
-                <th>Başlangıç / Bitiş</th>
-                <th style="text-align:right">Kontrol</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${adminData.sessions
-                .map((s) => {
-                  const t = computeLiveTiming(s);
-                  const badgeClass =
-                    t.status === 'Tamamlandı'
-                      ? 'status-completed'
-                      : t.status === 'Gecikti'
-                        ? 'status-rejected'
-                        : t.status === 'Molada'
-                          ? 'status-processing'
-                          : 'status-neutral';
-                  return `
-                  <tr data-live-break="${escapeHtml(s.id)}">
-                    <td><strong>${escapeHtml(s.userName)}</strong><div style="font-size:11.5px;color:var(--text-muted)">${escapeHtml(s.team)}</div></td>
-                    <td>${s.breakNumber}. Mola</td>
-                    <td class="tabular-nums">${escapeHtml(s.scheduledTime)}</td>
-                    <td class="tabular-nums">${s.plannedMinutes} dk ${s.extraMinutes > 0 ? `(+${s.extraMinutes} dk)` : ''}</td>
-                    <td>
-                      <span class="status-tag ${badgeClass}">${escapeHtml(t.status)}</span>
-                      ${s.status === 'Molada' || s.status === 'Gecikti' ? `<span class="break-countdown tabular-nums" style="font-size:13px;margin-left:8px">${t.isOverdue ? `+${formatMmSs(t.overdueSeconds)}` : formatMmSs(t.remainingSeconds)}</span>` : ''}
-                    </td>
-                    <td class="tabular-nums">${s.startedAt ? formatTimeTr(s.startedAt) : '—'} / ${s.endedAt ? formatTimeTr(s.endedAt) : '—'}</td>
-                    <td style="text-align:right">
-                      <div style="display:inline-flex;gap:6px">
-                        <button type="button" class="btn btn-secondary btn-sm" data-extend-break="${escapeHtml(s.id)}">+5 Dk</button>
-                        <button type="button" class="btn btn-secondary btn-sm" data-edit-break="${escapeHtml(s.id)}">Düzenle</button>
-                        ${s.status === 'Molada' || s.status === 'Gecikti' ? `<button type="button" class="btn btn-danger btn-sm" data-admin-end-break="${escapeHtml(s.id)}">Bitir</button>` : ''}
-                        ${s.status === 'Planlandı' ? `<button type="button" class="btn btn-ghost btn-sm" data-del-break="${escapeHtml(s.id)}" aria-label="Sil">${icon('trash')}</button>` : ''}
-                      </div>
-                    </td>
-                  </tr>
-                `;
-                })
-                .join('')}
-            </tbody>
-          </table>
-        </div>
+            <div id="break-plan-rows"></div>
+            <div class="break-plan-footer"><button type="button" class="btn btn-ghost btn-sm" id="bp-add-row">${icon('plus')} Saat Satırı Ekle</button><button type="submit" class="btn btn-primary" id="bp-save">Molayı Kaydet</button></div>
+            <p class="break-plan-note">Program her gün uygulanır. Mevcut molaların üzerine eklenir; çakışan saatler kaydedilmez.</p>
+          </form>
+        </section>
+        <div class="break-schedule-heading"><h3 class="card-title">Personel Mola Programları</h3><input id="break-person-search" type="search" class="input input-sm" placeholder="Personel ara…" aria-label="Mola programında personel ara" /></div>
+        <div class="break-person-list">
+          ${activeUsers.map((user) => {
+            const sessions = adminData.sessions.filter((session) => session.userId === user.id).sort((a,b) => a.scheduledTime.localeCompare(b.scheduledTime));
+            return `<section class="card break-person" data-person-name="${escapeHtml(user.displayName.toLocaleLowerCase('tr'))}">
+              <div class="break-person-header"><div><h3>${escapeHtml(user.displayName)}</h3><span>${escapeHtml(user.team)} · ${sessions.length} mola · ${sessions.reduce((sum, item) => sum + item.plannedMinutes, 0)} dk</span></div><button type="button" class="btn btn-secondary btn-sm" data-person-add-break="${escapeHtml(user.id)}">${icon('plus')} Mola Ekle</button></div>
+              ${sessions.length ? `<div class="break-person-sessions">${sessions.map((session) => {
+                const timing = computeLiveTiming(session);
+                const active = ['Molada','Gecikti'].includes(session.status);
+                return `<div class="break-schedule-line" data-live-break="${escapeHtml(session.id)}">
+                  <div class="break-schedule-time"><strong class="tabular-nums">${escapeHtml(session.scheduledTime)}</strong><span>${session.plannedMinutes} dk${session.extraMinutes ? ` +${session.extraMinutes}` : ''}</span></div>
+                  <span class="break-schedule-status ${timing.isOverdue ? 'is-overdue' : ''}">${escapeHtml(timing.status)}${active ? ` <span class="break-countdown tabular-nums">${timing.isOverdue ? '+' + formatMmSs(timing.overdueSeconds) : formatMmSs(timing.remainingSeconds)}</span>` : ''}</span>
+                  <div class="break-schedule-actions">${active ? `<button type="button" class="btn btn-secondary btn-sm" data-extend-break="${escapeHtml(session.id)}">+5 dk</button><button type="button" class="btn btn-danger btn-sm" data-admin-end-break="${escapeHtml(session.id)}">Bitir</button>` : ''}<button type="button" class="btn btn-ghost btn-sm" data-edit-break="${escapeHtml(session.id)}" ${session.status === 'Tamamlandı' ? 'disabled' : ''}>Düzenle</button>${session.status === 'Planlandı' ? `<button type="button" class="btn-icon" data-del-break="${escapeHtml(session.id)}" aria-label="${escapeHtml(user.displayName)} ${escapeHtml(session.scheduledTime)} molasını sil">${icon('trash')}</button>` : ''}</div>
+                </div>`;
+              }).join('')}</div>` : '<div class="break-person-empty">Henüz mola eklenmedi.</div>'}
+            </section>`;
+          }).join('') || '<div class="card empty-state">Önce Personel Yönetimi bölümünden bir personel ekleyin.</div>'}
+        </div><p id="break-no-match" class="break-person-empty" hidden>Eşleşen personel bulunamadı.</p>
       `;
-
-      viewport.querySelector('#admin-add-break-btn')?.addEventListener('click', openAddBreakModal);
+      renderPlanRows();
+      viewport.querySelector('#bp-user').addEventListener('change', (event) => { selectedUserId = event.target.value; });
+      viewport.querySelectorAll('[data-break-preset]').forEach((button) => button.addEventListener('click', () => {
+        draftRows = presets[Number(button.dataset.breakPreset)].times.map((time, index) => ({time, duration: index === 1 ? '30' : '15'})); renderPlanRows();
+      }));
+      viewport.querySelector('#bp-add-row').addEventListener('click', () => {
+        if (draftRows.length >= 12) return;
+        draftRows.push({time:'', duration:'15'}); renderPlanRows(); viewport.querySelector(`#bp-time-${draftRows.length - 1}`).focus();
+      });
+      viewport.querySelector('#break-plan-form').addEventListener('submit', async (event) => {
+        event.preventDefault(); const button = viewport.querySelector('#bp-save'); button.disabled = true;
+        try {
+          const result = await apiRequest('/breaks/schedules/batch', {method:'POST', body:{userId:selectedUserId, breaks:draftRows.map((row) => ({scheduledTime:row.time,durationMinutes:Number(row.duration)}))}});
+          showToast({title: `${result.schedules.length} Mola Eklendi`,type:'success'});
+          draftRows = [{time:'13:00',duration:'15'}]; await loadData();
+        } catch (error) { showToast({title:'Mola Eklenemedi',description:error.message,type:'danger'}); }
+        finally { const current = viewport.querySelector('#bp-save'); if (current) current.disabled = false; }
+      });
+      viewport.querySelectorAll('[data-person-add-break]').forEach((button) => button.addEventListener('click', () => {
+        selectedUserId = button.dataset.personAddBreak; viewport.querySelector('#bp-user').value = selectedUserId;
+        viewport.querySelector('.break-planner').scrollIntoView({block:'start',behavior:'smooth'}); viewport.querySelector('#bp-time-0').focus({preventScroll:true});
+      }));
+      viewport.querySelector('#break-person-search').addEventListener('input', (event) => {
+        const query = event.target.value.trim().toLocaleLowerCase('tr'); let visible = 0;
+        viewport.querySelectorAll('[data-person-name]').forEach((card) => { card.hidden = !card.dataset.personName.includes(query); if (!card.hidden) visible++; });
+        viewport.querySelector('#break-no-match').hidden = visible > 0;
+      });
       viewport.querySelectorAll('[data-extend-break]').forEach((btn) => {
         btn.addEventListener('click', async () => {
           await apiRequest(`/breaks/${btn.getAttribute('data-extend-break')}/extend`, {
@@ -441,7 +385,7 @@ export async function renderBreaksPage(viewport, { isAdminControl = false } = {}
   };
 
   const wsHandler = (ev) => {
-    if (ev.detail?.event === 'sync:refresh') { loadData().catch(() => {}); return; }
+    if (ev.detail?.event === 'sync:refresh') { if (!viewport.querySelector('#break-plan-form')?.contains(document.activeElement)) loadData().catch(() => {}); return; }
     const { event } = ev.detail || {};
     if (event === 'break:updated' || event === 'break:overdue') {
       loadData();

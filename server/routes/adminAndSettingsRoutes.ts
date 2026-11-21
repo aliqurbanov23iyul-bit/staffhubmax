@@ -213,7 +213,6 @@ adminAndSettingsRouter.post(
     store.users.push(newUser);
     await store.persistUser(newUser);
     store.ensureDefaultTemplatesAndSettings(newUser);
-    store.ensureDefaultSchedulesForNewUser(newUser);
 
     await store.persistAuditLog({
       id: `aud_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,

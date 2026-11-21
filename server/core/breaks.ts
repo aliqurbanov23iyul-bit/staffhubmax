@@ -14,7 +14,8 @@ export interface BreakTimingSnapshot {
 export function parseScheduledDateTime(dateKey: string, scheduledTime: string): Date {
   const [y, m, d] = dateKey.split('-').map(Number);
   const [hh, mm] = scheduledTime.split(':').map(Number);
-  return new Date(y, (m || 1) - 1, d || 1, hh || 0, mm || 0, 0, 0);
+  // Current Turkey time is UTC+03:00; independent of Vercel's server region.
+  return new Date(Date.UTC(y, (m || 1) - 1, d || 1, (hh || 0) - 3, mm || 0));
 }
 
 export function computeBreakTiming(

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import crypto from 'node:crypto';
 import {
   canStartBreak,
   computeBreakTiming,
@@ -13,6 +14,7 @@ import {
 import { hasPermission } from '../core/permissions';
 import type { FtdStatus } from '../core/types';
 import { getTodayDateKey } from '../core/dates';
+import { validateBreakPlans } from '../core/breakSchedules';
 import { store } from '../database/store';
 import { requireAuth, requirePermission, type AuthenticatedRequest } from '../middleware/auth';
 import { realtime } from '../services/realtime';
@@ -21,6 +23,27 @@ export const breaksAndFtdRouter = Router();
 breaksAndFtdRouter.use(requireAuth);
 
 // --- BREAK MANAGEMENT ---
+breaksAndFtdRouter.post('/breaks/schedules/batch', requirePermission('breaks.control_all'), async (req: AuthenticatedRequest, res) => {
+  const user = store.users.find((item) => item.id === req.body?.userId && item.isActive);
+  if (!user) { res.status(404).json({ error: 'Aktif personel seçin.' }); return; }
+  const existing = store.breakSchedules.filter((item) => item.userId === user.id && item.isActive !== false);
+  const validated = validateBreakPlans(req.body?.breaks, existing);
+  if (validated.error) { res.status(400).json({ error: validated.error }); return; }
+  const firstNumber = Math.max(0, ...existing.map((item) => item.breakNumber)) + 1;
+  const now = new Date().toISOString();
+  const schedules = validated.plans.map((plan, index) => ({
+    ...plan, id: `bs_${crypto.randomUUID()}`, userId: user.id, userName: user.displayName,
+    team: user.team, breakNumber: firstNumber + index, extraMinutes: 0, createdAt: now,
+  }));
+  store.breakSchedules.push(...schedules);
+  store.ensureTodayBreakSessionsForUser(user);
+  const admin = req.authUser!;
+  await store.persistAuditLog({ id: `aud_${crypto.randomUUID()}`, actorId: admin.id, actorName: admin.displayName, actorRole: admin.role,
+    action: 'MOLA_PROGRAMI_EKLE', targetType: 'break_schedule', targetId: user.id,
+    details: `${user.displayName}: ${schedules.map((item) => `${item.scheduledTime} / ${item.durationMinutes} dk`).join(', ')}`, createdAt: now });
+  realtime.broadcastAll('break:updated', { userId: user.id });
+  res.status(201).json({ schedules });
+});
 breaksAndFtdRouter.get('/breaks/my', (req: AuthenticatedRequest, res) => {
   const user = req.authUser!;
   const sessions = store.ensureTodayBreakSessionsForUser(user);
@@ -181,7 +204,7 @@ breaksAndFtdRouter.post(
       res.status(404).json({ error: 'Personel bulunamadı.' });
       return;
     }
-    if (typeof scheduledTime !== 'string' || !/^\d{2}:\d{2}$/.test(scheduledTime)) {
+    if (typeof scheduledTime !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(scheduledTime)) {
       res.status(400).json({ error: 'Geçerli bir saat girin (SS:DD).' });
       return;
     }
@@ -191,7 +214,9 @@ breaksAndFtdRouter.post(
       return;
     }
 
-    const existing = store.breakSchedules.filter((s) => s.userId === targetUser.id);
+    const existing = store.breakSchedules.filter((s) => s.userId === targetUser.id && s.isActive !== false);
+    const validation = validateBreakPlans([{scheduledTime,durationMinutes:dur}], existing);
+    if (validation.error) { res.status(400).json({ error: validation.error }); return; }
     const nextNum =
       existing.length > 0 ? Math.max(...existing.map((s) => s.breakNumber)) + 1 : 1;
 
@@ -241,7 +266,14 @@ breaksAndFtdRouter.patch(
       return;
     }
 
-    if (typeof scheduledTime === 'string' && /^\d{2}:\d{2}$/.test(scheduledTime)) {
+    if (session?.status === 'Tamamlandı') { res.status(409).json({ error: 'Tamamlanan molanın geçmişi değiştirilemez.' }); return; }
+    const proposed = validateBreakPlans([{
+      scheduledTime: scheduledTime ?? sched?.scheduledTime ?? session?.scheduledTime,
+      durationMinutes: durationMinutes ?? sched?.durationMinutes ?? session?.plannedMinutes,
+    }], store.breakSchedules.filter((item) => item.userId === (sched?.userId ?? session?.userId) && item.id !== sched?.id && item.isActive !== false));
+    if (proposed.error) { res.status(400).json({ error: proposed.error }); return; }
+
+    if (typeof scheduledTime === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(scheduledTime)) {
       if (sched) sched.scheduledTime = scheduledTime;
       if (session) session.scheduledTime = scheduledTime;
     }
@@ -309,7 +341,11 @@ breaksAndFtdRouter.delete(
   (req: AuthenticatedRequest, res) => {
     const session = store.breakSessions.find((s) => s.id === req.params.id);
     const schedId = session ? session.scheduleId : req.params.id;
-    store.breakSchedules = store.breakSchedules.filter((s) => s.id !== schedId);
+    if (store.breakSessions.some((item) => item.scheduleId === schedId && ['Molada', 'Gecikti'].includes(item.status))) {
+      res.status(409).json({ error: 'Önce aktif molayı bitirin.' }); return;
+    }
+    const schedule = store.breakSchedules.find((item) => item.id === schedId);
+    if (schedule) schedule.isActive = false;
     store.breakSessions = store.breakSessions.filter(
       (s) => s.scheduleId !== schedId || s.status === 'Tamamlandı',
     );

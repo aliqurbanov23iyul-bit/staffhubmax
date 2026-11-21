@@ -1,3 +1,5 @@
 export function getTodayDateKey(date: Date = new Date()): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date);
+  const get = (type: string) => parts.find((part) => part.type === type)!.value;
+  return `${get('year')}-${get('month')}-${get('day')}`;
 }
