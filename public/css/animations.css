@@ -4,6 +4,29 @@
   }
 }
 
+@keyframes ambientDrift {
+  0% { transform: translate3d(-3%, -2%, 0) scale(1); }
+  50% { transform: translate3d(4%, 3%, 0) scale(1.06); }
+  100% { transform: translate3d(-1%, 5%, 0) scale(1.02); }
+}
+@keyframes ambientFloat {
+  from { transform: translate3d(-16px, 22px, 0); }
+  to { transform: translate3d(28px, -26px, 0); }
+}
+@keyframes ambientBreathe {
+  from { opacity: 0.18; }
+  to { opacity: 0.48; }
+}
+html[data-anim='subtle'] .ambient-haze { animation-duration: 65s; opacity: 0.6; }
+html[data-anim='subtle'] .ambient-sparks { animation-duration: 80s, 18s; }
+html[data-anim='reduced'] .ambient-haze,
+html[data-anim='reduced'] .ambient-sparks { animation: none; }
+html[data-anim='reduced'] .ambient-sparks { opacity: 0.15; }
+@media (prefers-reduced-motion: reduce) {
+  .ambient-haze, .ambient-sparks { animation: none !important; }
+  .ambient-sparks { opacity: 0.15; }
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;

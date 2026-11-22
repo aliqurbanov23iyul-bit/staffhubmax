@@ -73,15 +73,32 @@ a:focus-visible {
   position: relative;
 }
 
-.shell.bg-fx::before {
-  content: '';
+.ambient-background {
+  display: none;
   position: fixed;
   inset: 0;
   pointer-events: none;
-  background:
-    radial-gradient(640px 380px at 82% -8%, var(--accent-soft), transparent 70%),
-    radial-gradient(500px 340px at 18% 108%, rgba(59, 130, 246, 0.06), transparent 70%);
+  overflow: hidden;
   z-index: 0;
+}
+.shell.bg-fx .ambient-background { display: block; }
+.ambient-haze, .ambient-sparks { position: absolute; display: block; }
+.ambient-haze {
+  inset: -16%;
+  background:
+    radial-gradient(ellipse at 78% 16%, var(--accent-soft), transparent 48%),
+    radial-gradient(ellipse at 20% 82%, color-mix(in srgb, var(--accent-primary) 11%, transparent), transparent 42%),
+    radial-gradient(ellipse at 56% 52%, rgba(59,130,246,0.07), transparent 48%);
+  animation: ambientDrift 28s ease-in-out infinite alternate;
+}
+.ambient-sparks {
+  inset: -10%;
+  opacity: 0.45;
+  background:
+    radial-gradient(circle, var(--accent-secondary) 1px, transparent 2px) 0 0 / 173px 197px,
+    radial-gradient(circle, var(--accent-secondary) 1px, transparent 2px) 67px 41px / 269px 251px;
+  mask-image: radial-gradient(ellipse at 65% 40%, black, transparent 72%);
+  animation: ambientFloat 40s linear infinite alternate, ambientBreathe 9s ease-in-out infinite alternate;
 }
 
 /* Sidebar */

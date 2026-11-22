@@ -169,6 +169,10 @@ export function openCommandPalette(navigateFn) {
 export function renderAppShell({ pageTitle, navigateFn, onLogout, renderPageContent }) {
   const root = document.getElementById('app-root');
   if (!root) return;
+  const sidebarScrollTop = root.querySelector('.sidebar-scroll')?.scrollTop || 0;
+  const focusedNav = root.contains(document.activeElement)
+    ? document.activeElement?.closest('[data-nav]')?.getAttribute('data-nav')
+    : null;
 
   const user = clientState.user;
   const mainItems = clientState.navItems.filter((i) => i.section === 'main');
@@ -202,6 +206,7 @@ export function renderAppShell({ pageTitle, navigateFn, onLogout, renderPageCont
 
   root.innerHTML = `
     <div class="${shellClasses}">
+      <div class="ambient-background" aria-hidden="true"><span class="ambient-haze"></span><span class="ambient-sparks"></span></div>
       <div class="mobile-backdrop" id="mobile-backdrop"></div>
       <aside class="sidebar" aria-label="Ana Menü">
         <div class="sidebar-header">
@@ -426,6 +431,13 @@ export function renderAppShell({ pageTitle, navigateFn, onLogout, renderPageCont
   document.addEventListener('click', closeDrops, { once: false });
 
   const viewport = root.querySelector('#page-viewport');
+  const sidebarScroll = root.querySelector('.sidebar-scroll');
+  if (sidebarScroll) sidebarScroll.scrollTop = sidebarScrollTop;
+  if (focusedNav && window.matchMedia('(min-width: 781px)').matches) {
+    Array.from(root.querySelectorAll('[data-nav]'))
+      .find((button) => button.getAttribute('data-nav') === focusedNav)
+      ?.focus({ preventScroll: true });
+  }
   if (viewport && typeof renderPageContent === 'function') {
     renderPageContent(viewport);
   }
